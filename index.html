@@ -483,7 +483,8 @@
         .invoice-modal-overlay.active .invoice-modal { transform: scale(1); }
 
     </style>
-	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -514,7 +515,7 @@
             <button onclick="app.search()"><i class="fas fa-search"></i></button>
         </div>
         <div class="header-actions">
-            <a href="#cuenta" onclick="app.showView('account'); app.renderAccountView();">
+            <a href="#cuenta" onclick="app.showView('account'); app.renderAccountView();" style="display:none;">
                 <i class="fas fa-user"></i> <span id="header-client-name">Mi Cuenta</span>
             </a>
             <a href="#" onclick="app.toggleCart()" style="position:relative;">
@@ -665,7 +666,7 @@
     </div>
 
     <!-- ═══ MI CUENTA ═══ -->
-    <div class="view" id="view-account">
+    <div class="view hidden" id="view-account">
         <section class="hero" style="padding: 40px 20px;">
             <h1>Mi Cuenta <span>MOTOS JONTE</span></h1>
             <p id="account-hero-text">Iniciá sesión o creá tu cuenta para gestionar tus pedidos</p>
@@ -686,8 +687,8 @@
         <p>Ingresá tus credenciales para acceder</p>
         <form onsubmit="app.login(event)">
             <div class="form-group">
-                <label>Email de Admin</label>
-                <input type="email" id="login-user" required placeholder="admin@motosjonte.com" value="admin@motosjonte.com">
+                <label>Usuario</label>
+                <input type="text" id="login-user" required placeholder="admin" value="admin">
             </div>
             <div class="form-group">
                 <label>Contraseña</label>
@@ -1207,12 +1208,6 @@ https://ejemplo.com/foto2.jpg" onchange="app.handleImageUrls()"></textarea>
 <!-- ═══════════════════════════════════════════════════════════════ -->
 <!-- ║  APP JAVASCRIPT                                               ║ -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
-
-const SUPABASE_URL = 'https://huqyvuncegvwcvqucuxl.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1cXl2dW5jZWd2d2N2cXVjdXhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MzI2OTYsImV4cCI6MjA5MzQwODY5Nn0.UVBnJEbpwgWkeHJjkCkXN0kaHQhk2xpoTq3uSrn6SIc'; // pública, segura en browser
-
-const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON);
-
 <script>
 const DEFAULT_CATEGORIES = [
     { id: "escapes", name: "Escapes", icon: "fa-wind", desc: "Escapes deportivos y originales" },
@@ -1239,505 +1234,131 @@ const app = {
         tempImages: [], tempProduct: null,
     },
 
-    // ═══ INIT ═══
-    async init() {
-        this.loadCart(); // carrito se mantiene local
-        await this.syncData(); // carga desde Supabase
-        this.checkAdminSession(); 
-        this.checkClientSession();
+    init() {
+        this.loadData(); this.loadCart(); this.checkAdminSession(); this.checkClientSession();
         this.renderNav(); this.renderHero(); this.renderBenefits(); this.renderBanners();
         this.renderPublicProducts(); this.renderBrands(); this.renderCategories(); this.renderFooterCats();
         this.updateCartUI(); this.setupSearch(); this.setupHashRouting(); this.populateCategorySelects();
         this.updateClientUI(); this.renderAccountView();
-        
-        // Escuchar cambios de auth
-        supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'SIGNED_IN' && session) {
-                // actualizar UI si es necesario
-            }
-            if (event === 'SIGNED_OUT') {
-                this.data.clientSession = null;
-                this.renderAccountView();
-            }
-        });
     },
 
-    // ═══ SYNC (reemplaza loadData/saveData) ═══
-    async syncData() {
-        const { data: cats, error: cErr } = await supabase.from('categories').select('*');
-        if (cErr) console.error(cErr);
-        this.data.categories = cats || [];
+    loadData() {
+        const cats = localStorage.getItem('mj_categories');
+        const prods = localStorage.getItem('mj_products');
+        const brands = localStorage.getItem('mj_brands');
+        const orders = localStorage.getItem('mj_orders');
+        const msgs = localStorage.getItem('mj_messages');
+        this.data.categories = cats ? JSON.parse(cats) : [...DEFAULT_CATEGORIES];
+        this.data.products = prods ? JSON.parse(prods) : [...DEFAULT_PRODUCTS];
+        this.data.brands = brands ? JSON.parse(brands) : [...DEFAULT_BRANDS];
+        this.data.orders = orders ? JSON.parse(orders) : [];
+        this.data.messages = msgs ? JSON.parse(msgs) : [];
+        if (!cats) this.saveCategories(); if (!prods) this.saveProducts(); if (!brands) this.saveBrands();
+    },
+    saveCategories() { localStorage.setItem('mj_categories', JSON.stringify(this.data.categories)); },
+    saveProducts() { localStorage.setItem('mj_products', JSON.stringify(this.data.products)); },
+    saveBrands() { localStorage.setItem('mj_brands', JSON.stringify(this.data.brands)); },
+    saveOrders() { localStorage.setItem('mj_orders', JSON.stringify(this.data.orders)); },
+    saveMessages() { localStorage.setItem('mj_messages', JSON.stringify(this.data.messages)); },
+    loadCart() { const saved = localStorage.getItem('mj_cart'); if (saved) this.data.cart = JSON.parse(saved); },
+    saveCart() { localStorage.setItem('mj_cart', JSON.stringify(this.data.cart)); },
 
-        const { data: prods, error: pErr } = await supabase.from('products').select('*');
-        if (pErr) console.error(pErr);
-        
-        this.data.products = (prods || []).map(p => ({
-            id: p.id,
-            name: p.name,
-            category: p.category_id,
-            desc: p.description,
-            brand: p.brand,
-            sku: p.sku,
-            price: parseFloat(p.price),
-            oldPrice: p.old_price ? parseFloat(p.old_price) : null,
-            discount: p.discount || 0,
-            transferPrice: parseFloat(p.transfer_price || 0),
-            stock: p.stock || 0,
-            outOfStock: p.out_of_stock || false,
-            freeShipping: p.free_shipping || false,
-            featured: p.featured || false,
-            new: p.new || false,
-            hotSale: p.hot_sale || false,
-            image: p.images?.[0] || 'https://via.placeholder.com/400x300?text=Sin+Imagen',
-            images: p.images || [],
-        }));
-
-        // Extraer marcas únicas
-        const allBrands = (prods || []).map(p => p.brand).filter(Boolean);
-        this.data.brands = [...new Set(allBrands.map(b => b.toUpperCase()))];
+    checkAdminSession() {
+        const session = localStorage.getItem('mj_admin_session');
+        if (session) { this.data.admin = JSON.parse(session); if (this.data.admin.loggedIn) document.getElementById('admin-link').style.display = 'flex'; }
     },
 
-    // ═══ LOGIN ADMIN (usando Supabase Auth + profiles.role) ═══
-    async login(e) {
-        e.preventDefault();
-        const email = document.getElementById('login-user').value;
-        const pass = document.getElementById('login-pass').value;
-
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-        if (error || !data.user) {
-            this.toast('Usuario o contraseña incorrectos', 'error'); 
-            return;
+    checkClientSession() {
+        const session = localStorage.getItem('mj_client_session');
+        if (session) {
+            this.data.clientSession = JSON.parse(session);
+            this.updateClientUI();
         }
-
-        // Verificar rol admin
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', data.user.id)
-            .single();
-
-        if (profile?.role !== 'admin') {
-            await supabase.auth.signOut();
-            this.toast('No tenés permisos de administrador', 'error');
-            return;
-        }
-
-        this.data.admin = { loggedIn: true, user: data.user.email, id: data.user.id };
-        localStorage.setItem('mj_admin_session', JSON.stringify(this.data.admin));
-        this.enterAdmin();
-        this.toast('Bienvenido al Panel de Administración', 'success');
     },
 
-    logout() {
-        supabase.auth.signOut();
-        this.data.admin = { loggedIn: false, user: null };
-        localStorage.removeItem('mj_admin_session');
-        document.getElementById('admin-panel').classList.add('hidden');
-        ['public-topbar','public-header','public-nav','public-views','public-footer','wa-float'].forEach(id => 
-            document.getElementById(id).classList.add('hidden')
-        );
-        document.getElementById('login-page').classList.remove('hidden');
-        document.getElementById('admin-link').style.display = 'none';
-        this.toast('Sesión cerrada correctamente', 'success');
+    updateClientUI() {
+        const user = this.data.clientSession;
+        if (!user) return;
+        const nameEl = document.getElementById('client-name');
+        const emailEl = document.getElementById('client-email');
+        const headerName = document.getElementById('header-client-name');
+        if (nameEl) nameEl.textContent = user.name || 'Cliente';
+        if (emailEl) emailEl.textContent = user.email || '';
+        if (headerName) headerName.textContent = user.name ? user.name.split(' ')[0] : 'Mi Cuenta';
     },
 
-    // ═══ LOGIN CLIENTE ═══
-    async loginClient(e) {
+    loginClient(e) {
         e.preventDefault();
         const email = document.getElementById('login-client-email').value.trim().toLowerCase();
         const pass = document.getElementById('login-client-pass').value;
-
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-        if (error) { this.toast('Email o contraseña incorrectos', 'error'); return; }
-
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-        this.data.clientSession = { 
-            name: profile?.name || data.user.email, 
-            email: data.user.email, 
-            id: data.user.id 
-        };
+        const users = JSON.parse(localStorage.getItem('mj_clients') || '[]');
+        const user = users.find(u => u.email === email && u.password === pass);
+        if (!user) { this.toast('Email o contraseña incorrectos', 'error'); return; }
+        this.data.clientSession = { name: user.name, email: user.email, id: user.id };
         localStorage.setItem('mj_client_session', JSON.stringify(this.data.clientSession));
-        this.updateClientUI(); 
-        this.renderAccountView();
-        this.toast(`Bienvenido, ${this.data.clientSession.name}!`, 'success');
+        this.updateClientUI(); this.renderAccountView();
+        this.toast(`Bienvenido, ${user.name}!`, 'success');
     },
 
-    async registerClient(e) {
+    registerClient(e) {
         e.preventDefault();
         const name = document.getElementById('reg-name').value.trim();
         const email = document.getElementById('reg-email').value.trim().toLowerCase();
         const pass = document.getElementById('reg-pass').value;
         const pass2 = document.getElementById('reg-pass2').value;
-        
         if (pass !== pass2) { this.toast('Las contraseñas no coinciden', 'error'); return; }
-
-        const { data, error } = await supabase.auth.signUp({ 
-            email, 
-            password: pass,
-            options: { data: { name } }
-        });
-        
-        if (error) { this.toast(error.message, 'error'); return; }
-
-        // El trigger crea el perfil automáticamente, pero actualizamos el nombre
-        if (data.user) {
-            await supabase.from('profiles').update({ name }).eq('id', data.user.id);
-            this.data.clientSession = { name, email, id: data.user.id };
-            localStorage.setItem('mj_client_session', JSON.stringify(this.data.clientSession));
-            this.updateClientUI(); 
-            this.renderAccountView();
-            this.toast('Cuenta creada correctamente', 'success');
-        }
+        let users = JSON.parse(localStorage.getItem('mj_clients') || '[]');
+        if (users.find(u => u.email === email)) { this.toast('Ya existe una cuenta con ese email', 'error'); return; }
+        const newUser = { id: Date.now(), name, email, password: pass };
+        users.push(newUser); localStorage.setItem('mj_clients', JSON.stringify(users));
+        this.data.clientSession = { name: newUser.name, email: newUser.email, id: newUser.id };
+        localStorage.setItem('mj_client_session', JSON.stringify(this.data.clientSession));
+        this.updateClientUI(); this.renderAccountView();
+        this.toast('Cuenta creada correctamente', 'success');
     },
 
     logoutClient() {
-        supabase.auth.signOut();
         this.data.clientSession = null;
         localStorage.removeItem('mj_client_session');
         this.renderAccountView();
         this.toast('Sesión cerrada', 'success');
     },
 
-    // ═══ PRODUCTOS: GUARDAR/EDITAR/ELIMINAR ═══
-    async saveProduct(e) {
-        e.preventDefault();
-        const name = document.getElementById('prod-name').value;
-        const category = document.getElementById('prod-category').value;
-        const net = parseFloat(document.getElementById('prod-price-net').value) || 0;
-        const disc = parseFloat(document.getElementById('prod-discount').value) || 0;
-        const oldPrice = parseFloat(document.getElementById('prod-old-price').value) || null;
-        const iva = net * 0.21;
-        const total = net + iva;
-        const final = total * (1 - disc / 100);
-        const transfer = final * 0.84;
-        const stockVal = parseInt(document.getElementById('prod-stock').value) || 0;
-        const isEdit = this.editingProductId !== null;
-        const prodId = isEdit ? this.editingProductId : Date.now();
-
-        // Subir imágenes nuevas a Storage si son base64 (FileReader)
-        const uploadedImages = [];
-        for (const img of this.tempImages) {
-            if (img.startsWith('data:')) {
-                // Convertir base64 a file y subir
-                const res = await fetch(img);
-                const blob = await res.blob();
-                const fileName = `${prodId}-${Date.now()}.jpg`;
-                const { data: upData, error: upErr } = await supabase.storage
-                    .from('product-images')
-                    .upload(fileName, blob, { contentType: 'image/jpeg' });
-                if (upErr) { this.toast('Error subiendo imagen: ' + upErr.message, 'error'); return; }
-                const { data: { publicUrl } } = supabase.storage.from('product-images').getPublicUrl(fileName);
-                uploadedImages.push(publicUrl);
-            } else {
-                uploadedImages.push(img); // ya es URL
-            }
-        }
-
-        const dbPayload = {
-            id: prodId,
-            name,
-            category_id: category,
-            description: document.getElementById('prod-desc').value,
-            brand: document.getElementById('prod-brand').value,
-            sku: document.getElementById('prod-sku').value,
-            price: Math.round(final * 100) / 100,
-            old_price: oldPrice,
-            discount: disc,
-            transfer_price: Math.round(transfer * 100) / 100,
-            stock: stockVal,
-            out_of_stock: document.getElementById('prod-out-stock').checked,
-            free_shipping: document.getElementById('prod-free-ship').checked,
-            featured: document.getElementById('prod-featured').checked,
-            new: document.getElementById('prod-new').checked,
-            hot_sale: document.getElementById('prod-hot-sale').checked,
-            images: uploadedImages,
-        };
-
-        const { error } = await supabase.from('products').upsert(dbPayload);
-        if (error) { this.toast(error.message, 'error'); return; }
-
-        this.editingProductId = null;
-        this.tempImages = []; 
-        this.renderImagePreview(); 
-        e.target.reset();
-        document.getElementById('btn-cancel-edit').style.display = 'none';
-        document.getElementById('wizard-title').innerHTML = '<i class="fas fa-plus-circle" style="color:var(--orange)"></i> Nuevo Producto';
-        document.getElementById('btn-save-text').textContent = 'Publicar Producto';
-        
-        await this.syncData();
-        this.goStep(1);
-        this.renderPublicProducts(); 
-        this.renderShop(); 
-        this.renderAdminProducts(); 
-        this.renderAdminDashboard(); 
-        this.populateCategorySelects();
-        this.toast(isEdit ? 'Producto actualizado' : '¡Producto publicado con éxito!', 'success');
-    },
-
-    async deleteProduct(id) {
-        if (!confirm('¿Eliminar este producto permanentemente?')) return;
-        const { error } = await supabase.from('products').delete().eq('id', id);
-        if (error) { this.toast(error.message, 'error'); return; }
-        await this.syncData();
-        this.renderAdminProducts(); 
-        this.renderPublicProducts(); 
-        this.renderShop(); 
-        this.toast('Producto eliminado', 'success');
-    },
-
-    async quickUpdate(id) {
-        const p = this.data.products.find(x => x.id === id);
-        if (!p) return;
-        const stockVal = parseInt(document.getElementById(`quick-stock-${id}`)?.value) || 0;
-        const disp = document.getElementById(`quick-disp-${id}`)?.checked;
-        const hot = document.getElementById(`quick-hotsale-${id}`)?.checked;
-        const disc = parseInt(document.getElementById(`quick-disc-${id}`)?.value) || 0;
-
-        let price = p.price;
-        let old_price = p.oldPrice;
-        let transfer_price = p.transferPrice;
-
-        if (disc > 0) {
-            if (!old_price || old_price <= price) old_price = price;
-            const base = old_price; // usamos old como base de cálculo
-            price = Math.round(base * (1 - disc/100) * 100) / 100;
-            transfer_price = Math.round(price * 0.84 * 100) / 100;
+    renderAccountView() {
+        const container = document.getElementById('account-container');
+        const heroText = document.getElementById('account-hero-text');
+        if (!container) return;
+        if (!this.data.clientSession) {
+            if (heroText) heroText.textContent = 'Iniciá sesión o creá tu cuenta para gestionar tus pedidos';
+            container.innerHTML = `
+                <div class="account-layout" style="max-width:500px; margin:0 auto;">
+                    <div class="account-content">
+                        <h3 style="margin-bottom:20px; color:var(--white);"><i class="fas fa-sign-in-alt" style="color:var(--orange)"></i> Iniciar Sesión</h3>
+                        <form onsubmit="app.loginClient(event)">
+                            <div class="form-group"><label>Email</label><input type="email" id="login-client-email" required placeholder="tu@email.com"></div>
+                            <div class="form-group"><label>Contraseña</label><input type="password" id="login-client-pass" required placeholder="••••••"></div>
+                            <button type="submit" class="btn btn-primary btn-block">Ingresar <i class="fas fa-arrow-right"></i></button>
+                        </form>
+                    </div>
+                </div>`;
         } else {
-            if (old_price && old_price > price) {
-                price = old_price;
-                transfer_price = Math.round(price * 0.84 * 100) / 100;
-            }
-        }
-
-        const { error } = await supabase.from('products').update({
-            stock: stockVal,
-            out_of_stock: !disp,
-            hot_sale: hot,
-            discount: disc,
-            price,
-            old_price,
-            transfer_price
-        }).eq('id', id);
-
-        if (error) { this.toast(error.message, 'error'); return; }
-        await this.syncData();
-        this.renderPublicProducts(); 
-        this.renderShop(); 
-        this.renderAdminProducts();
-        this.toast(`"${p.name}" actualizado`, 'success');
-    },
-
-    // ═══ CATEGORÍAS ═══
-    async saveCategory(e) {
-        e.preventDefault();
-        const name = document.getElementById('cat-name').value;
-        const id = document.getElementById('cat-id').value;
-        const icon = document.getElementById('cat-icon').value || 'fa-box';
-        const desc = document.getElementById('cat-desc').value;
-
-        const { error } = await supabase.from('categories').insert({ id, name, icon, description: desc });
-        if (error) { this.toast(error.message, 'error'); return; }
-        
-        await this.syncData();
-        this.renderAdminCategories(); 
-        this.renderCategories(); 
-        this.renderFooterCats(); 
-        this.populateCategorySelects();
-        this.closeCategoryModal(); 
-        e.target.reset(); 
-        this.toast('Categoría creada correctamente', 'success');
-    },
-
-    async deleteCategory(id) {
-        const count = this.data.products.filter(p => p.category === id).length;
-        if (count > 0) {
-            if (!confirm(`Esta categoría tiene ${count} productos. ¿Eliminar de todos modos?`)) return;
-            // Reasignar a null o dejar como está
-        }
-        const { error } = await supabase.from('categories').delete().eq('id', id);
-        if (error) { this.toast(error.message, 'error'); return; }
-        await this.syncData();
-        this.renderAdminCategories(); 
-        this.renderCategories(); 
-        this.renderFooterCats(); 
-        this.renderPublicProducts(); 
-        this.populateCategorySelects();
-        this.toast('Categoría eliminada', 'success');
-    },
-
-    // ═══ ÓRDENES ═══
-    async confirmOrder() {
-        const subtotal = this.data.cart.reduce((sum, i) => sum + (i.price * i.qty), 0);
-        const inv = this.checkoutData.invoice;
-        const cd = this.checkoutData.clientData;
-        const orderId = 'F-' + Date.now().toString().slice(-8);
-        
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        const orderPayload = {
-            id: orderId,
-            user_id: user ? user.id : null,
-            client_data: cd,
-            items: this.data.cart.map(i => ({ name: i.name, qty: i.qty, price: i.price, image: i.image })),
-            subtotal: inv.subtotal,
-            discount: inv.discount || 0,
-            shipping_cost: inv.shippingCost,
-            shipping_method: this.checkoutData.shipping,
-            payment_method: this.checkoutData.payment,
-            payment_label: inv.paymentLabel,
-            shipping_label: inv.shippingLabel,
-            total: inv.total,
-            cuota: inv.cuota,
-            status: 'Pendiente'
-        };
-
-        const { error } = await supabase.from('orders').insert(orderPayload);
-        if (error) { this.toast('Error guardando pedido: ' + error.message, 'error'); return; }
-
-        // Enviar factura por mail (se mantiene tu lógica de mailto)
-        const itemsText = this.data.cart.map(i => `${i.qty}x ${i.name} - ${this.formatPrice(i.price * i.qty)}`).join('%0D%0A');
-        const subject = encodeURIComponent(`Factura MOTOS JONTE - ${orderId}`);
-        const body = encodeURIComponent(
-            `Hola ${cd.name},%0D%0A%0D%0AFACTURA: ${orderId}%0D%0AFECHA: ${new Date().toLocaleString('es-AR')}%0D%0A%0D%0A` +
-            `CLIENTE:%0D%0A${cd.name}%0D%0A${cd.email}%0D%0A${cd.phone}%0D%0A` +
-            `DNI/CUIT: ${cd.dni}%0D%0A${cd.address}, ${cd.city}, ${cd.province} (${cd.zip})%0D%0A%0D%0A` +
-            `PRODUCTOS:%0D%0A${itemsText}%0D%0A%0D%0A` +
-            `TOTAL: ${this.formatPrice(inv.total)}%0D%0A` +
-            `Pago: ${inv.paymentLabel}%0D%0AEnvío: ${inv.shippingLabel}`
-        );
-        window.open(`mailto:${cd.email}?subject=${subject}&body=${body}`, '_blank');
-
-        this.data.cart = []; 
-        this.saveCart(); 
-        this.updateCartUI(); 
-        this.closeCheckout();
-        await this.syncData();
-        this.renderAdminOrders(); 
-        this.renderAdminDashboard(); 
-        this.renderAccountOrders();
-        this.toast(`¡Compra confirmada! Factura ${orderId}`, 'success');
-        this.goHome();
-    },
-
-    // ═══ MENSAJES ═══
-    async sendContact(e) {
-        e.preventDefault();
-        const form = e.target;
-        const payload = {
-            name: form.querySelector('input[type="text"]').value,
-            email: form.querySelector('input[type="email"]').value,
-            subject: form.querySelector('select').value,
-            message: form.querySelector('textarea').value
-        };
-        const { error } = await supabase.from('contact_messages').insert(payload);
-        if (error) { this.toast(error.message, 'error'); return; }
-        this.toast('Mensaje enviado correctamente', 'success');
-        form.reset();
-    },
-
-    // ═══ RENDER ADMIN (ahora async para reflejar datos reales) ═══
-    async renderAdminOrders() {
-        const { data: orders, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-        if (error) { console.error(error); return; }
-        this.data.orders = orders || [];
-        // ... tu lógica de renderizado actual usa this.data.orders ...
-        // (mantené el innerHTML que ya tenés, funciona igual)
-        const tbody = document.getElementById('admin-orders-table');
-        if (!orders || orders.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="fas fa-shopping-bag"></i><h4>No hay pedidos aún</h4></td></tr>';
-            return;
-        }
-        tbody.innerHTML = orders.map((o, i) => {
-            const cd = o.client_data || {};
-            return `<tr>
-                <td><strong style="color:var(--orange);">${o.id}</strong></td>
-                <td><strong>${cd.name || 'Web'}</strong><br><small style="color:#888;">${cd.email || ''}</small></td>
-                <td>${o.items.length} productos</td>
-                <td><strong>${this.formatPrice(o.total)}</strong></td>
-                <td><span class="badge" style="background:${o.payment_method==='transfer'?'#448aff':o.payment_method==='card'?'#7c4dff':'#00c853'}; color:#fff;">${o.payment_label || '-'}</span></td>
-                <td>${new Date(o.created_at).toLocaleString('es-AR')}</td>
-                <td>
-                    <span class="badge badge-free">${o.status}</span><br>
-                    <button class="btn btn-sm btn-primary" style="margin-top:6px;" onclick="app.openAdminInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> Ver Factura</button>
-                </td>
-            </tr>`;
-        }).join('');
-    },
-
-    async renderAdminMessages() {
-        const { data: msgs, error } = await supabase.from('contact_messages').select('*').order('created_at', { ascending: false });
-        if (error) return;
-        this.data.messages = msgs || [];
-        const tbody = document.getElementById('admin-messages-table');
-        if (!msgs || msgs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="fas fa-envelope"></i><h4>No hay mensajes</h4></td></tr>';
-            return;
-        }
-        tbody.innerHTML = msgs.map(m => `<tr>
-            <td>${new Date(m.created_at).toLocaleString('es-AR')}</td>
-            <td>${m.name}</td>
-            <td>${m.email}</td>
-            <td>${m.subject}</td>
-            <td>${m.message}</td>
-        </tr>`).join('');
-    },
-
-    async renderAccountOrders() {
-        const container = document.getElementById('account-orders-list');
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        
-        const { data: orders, error } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false });
-            
-        if (error || !orders || orders.length === 0) {
-            container.innerHTML = `<div class="empty-state"><i class="fas fa-box-open"></i><h4>No tenés pedidos aún</h4><p>Los pedidos que realices aparecerán acá</p><a href="#tienda" class="btn btn-primary" style="margin-top:15px;" onclick="app.showView('shop')">Ir a la tienda</a></div>`;
-            return;
-        }
-        
-        container.innerHTML = orders.map(o => {
-            const cd = o.client_data || {};
-            return `<div class="order-card">
-                <div class="order-card-header">
-                    <div><h4>Factura ${o.id}</h4><span style="font-size:12px; color:var(--gray-light);"><i class="fas fa-calendar"></i> ${new Date(o.created_at).toLocaleString('es-AR')}</span></div>
-                    <span class="order-status status-pending">${o.status}</span>
-                </div>
-                <div style="margin-bottom:12px;">
-                    <span class="badge" style="background:${o.payment_method==='transfer'?'#448aff':o.payment_method==='card'?'#7c4dff':'#00c853'}; color:#fff; margin-right:6px;">${o.payment_label}</span>
-                    <span class="badge" style="background:var(--gray-mid); color:var(--white);">${o.shipping_label}</span>
-                </div>
-                ${o.items.map(item => `<div class="order-item"><span>${item.qty}x ${item.name}</span><span>${this.formatPrice(item.price * item.qty)}</span></div>`).join('')}
-                <div class="order-total"><span>Total</span><span>${this.formatPrice(o.total)}</span></div>
-                ${o.cuota ? `<p style="font-size:12px; color:var(--gray-light); text-align:right; margin-top:4px;"><i class="fas fa-credit-card" style="color:var(--orange)"></i> 3 cuotas sin interés de ${this.formatPrice(o.cuota)}</p>` : ''}
-            </div>`;
-        }).join('');
-    },
-
-    // ═══ DASHBOARD STATS (async) ═══
-    async renderAdminDashboard() {
-        const { count: prodCount } = await supabase.from('products').select('*', { count: 'exact', head: true });
-        const { count: catCount } = await supabase.from('categories').select('*', { count: 'exact', head: true });
-        const { count: ordCount } = await supabase.from('orders').select('*', { count: 'exact', head: true });
-        const { data: orders } = await supabase.from('orders').select('total');
-        const revenue = (orders || []).reduce((s, o) => s + (parseFloat(o.total) || 0), 0);
-        
-        document.getElementById('stat-products').textContent = prodCount || 0;
-        document.getElementById('stat-categories').textContent = catCount || 0;
-        document.getElementById('stat-orders').textContent = ordCount || 0;
-        document.getElementById('stat-revenue').textContent = this.formatPrice(revenue);
-    },
-
-    // Mantener carrito en localStorage (estado de UI)
-    loadCart() { 
-        const saved = localStorage.getItem('mj_cart'); 
-        if (saved) this.data.cart = JSON.parse(saved); 
-    },
-    saveCart() { 
-        localStorage.setItem('mj_cart', JSON.stringify(this.data.cart)); 
-    },
+            const user = this.data.clientSession;
+            if (heroText) heroText.textContent = 'Gestioná tus pedidos y datos personales';
+            const isAdmin = this.data.admin.loggedIn;
+            container.innerHTML = `
+                <div class="account-layout">
+                    <aside class="account-sidebar">
+                        <div class="account-user">
+                            <i class="fas fa-user-circle"></i>
+                            <h3 id="client-name">${user.name || 'Cliente'}</h3>
+                            <p id="client-email">${user.email || ''}</p>
+                        </div>
+                        <ul class="account-menu">
+                            <li><a href="#" class="active" onclick="app.showAccountTab('orders', this)"><i class="fas fa-shopping-bag"></i> Mis Pedidos</a></li>
+                            <li><a href="#" onclick="app.showAccountTab('data', this)"><i class="fas fa-id-card"></i> Mis Datos</a></li>
+                            <li><a href="#" onclick="app.showAccountTab('addresses', this)"><i class="fas fa-map-marker-alt"></i> Direcciones</a></li>
+                            <li><a href="#" onclick="app.showAccountTab('favorites', this)"><i class="fas fa-heart"></i> Favoritos</a></li>
+                            ${isAdmin ? `<li style="margin-top:15px; border-top:1px solid var(--border); padding-top:15px;"><a href="#" onclick="app.goAdmin()"><i class="fas fa-cog"></i> Panel Admin</a></li>` : ''}
                             <li style="margin-top:10px;"><a href="#" onclick="app.logoutClient()" style="color:var(--red);"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a></li>
                         </ul>
                     </aside>
@@ -2152,10 +1773,47 @@ const app = {
                 <td>${o.date}</td>
                 <td>
                     <span class="badge badge-free">${o.status || 'Pendiente'}</span><br>
-                    <button class="btn btn-sm btn-primary" style="margin-top:6px;" onclick="app.openAdminInvoice('${o.id || i}')"><i class="fas fa-file-invoice"></i> Ver Factura</button>
+                    <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+                        <button class="btn btn-sm btn-primary" onclick="app.openAdminInvoice('${o.id || i}')"><i class="fas fa-file-invoice"></i> Ver</button>
+                        <button class="btn btn-sm btn-success" onclick="app.downloadOrderInvoice('${o.id || i}')"><i class="fas fa-download"></i> PDF</button>
+                    </div>
                 </td>
             </tr>`;
         }).join('');
+    },
+
+    async downloadOrderInvoice(orderId) {
+        const o = this.data.orders.find(x => x.id === orderId) || this.data.orders[orderId];
+        if (!o) return;
+        const tempDiv = document.createElement('div');
+        tempDiv.style.cssText = `position:fixed; left:-9999px; top:0; width:700px; background:#0f0f0f !important; padding:0 !important; margin:0 !important; border:none !important; border-radius:0 !important; box-shadow:none !important; overflow:visible !important; font-family:'Segoe UI',system-ui,sans-serif; color:#e0e0e0; line-height:1.6;`;
+        const cd = o.clientData || {};
+        const itemsHtml = o.items.map(it => `<div style="display:flex; justify-content:space-between; padding:8px 0; font-size:14px; border-bottom:1px solid #2a2a2a; color:#e0e0e0;"><span>${it.qty}x ${it.name}</span><span>${this.formatPrice(it.price * it.qty)}</span></div>`).join('');
+        tempDiv.innerHTML = `<div style="background:#0f0f0f; padding:25px;"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; padding-bottom:15px; border-bottom:2px solid #2a2a2a;"><div style="font-size:22px; font-weight:900; color:#ff6b00;"><i class="fas fa-motorcycle"></i> MOTOS JONTE</div><div style="text-align:right; font-size:13px; color:#888;"><strong style="color:#f0f0f0; display:block; font-size:16px; margin-bottom:4px;">FACTURA ${o.id || ''}</strong><span>${o.date}</span></div></div><div style="margin-bottom:20px;"><h4 style="font-size:13px; text-transform:uppercase; color:#888; margin-bottom:8px;">Cliente</h4><p style="font-size:14px; color:#e0e0e0; line-height:1.6;"><strong style="color:#f0f0f0;">${cd.name || '-'}</strong><br>${cd.email || '-'} | ${cd.phone || '-'}<br>DNI/CUIT: ${cd.dni || '-'}<br>${cd.address || '-'}, ${cd.city || '-'}, ${cd.province || '-'} (${cd.zip || '-'})</p></div><div style="margin-bottom:20px;"><h4 style="font-size:13px; text-transform:uppercase; color:#888; margin-bottom:8px;">Productos</h4>${itemsHtml}</div><div style="margin-bottom:20px;"><h4 style="font-size:13px; text-transform:uppercase; color:#888; margin-bottom:8px;">Resumen</h4><div style="display:flex; justify-content:space-between; padding:8px 0; font-size:14px; border-bottom:1px solid #2a2a2a; color:#e0e0e0;"><span>Subtotal</span><span>${this.formatPrice(o.subtotal || o.total)}</span></div>${o.discount ? `<div style="display:flex; justify-content:space-between; padding:8px 0; font-size:14px; border-bottom:1px solid #2a2a2a; color:#00c853;"><span>Descuento Transferencia</span><span>-${this.formatPrice(o.discount)}</span></div>` : ''}${o.shippingCost ? `<div style="display:flex; justify-content:space-between; padding:8px 0; font-size:14px; border-bottom:1px solid #2a2a2a; color:#e0e0e0;"><span>Envío</span><span>${this.formatPrice(o.shippingCost)}</span></div>` : '<div style="display:flex; justify-content:space-between; padding:8px 0; font-size:14px; border-bottom:1px solid #2a2a2a; color:#00c853;"><span>Envío</span><span>GRATIS</span></div>'}<div style="display:flex; justify-content:space-between; padding:15px 0; font-size:20px; font-weight:800; color:#ff6b00; border-top:2px solid #2a2a2a; margin-top:10px;"><span>TOTAL</span><span>${this.formatPrice(o.total)}</span></div>${o.cuota ? `<div style="text-align:right; font-size:13px; color:#888; margin-top:6px;"><i class="fas fa-credit-card" style="color:#ff6b00;"></i> 3 cuotas sin interés de <strong style="color:#f0f0f0;">${this.formatPrice(o.cuota)}</strong></div>` : ''}</div><div style="margin-top:15px; padding-top:15px; border-top:1px solid #2a2a2a; display:flex; gap:20px; flex-wrap:wrap;"><div><i class="fas fa-credit-card" style="color:#ff6b00;"></i> <strong style="color:#f0f0f0;">${o.paymentLabel || '-'}</strong></div><div><i class="fas fa-truck" style="color:#ff6b00;"></i> <strong style="color:#f0f0f0;">${o.shippingLabel || '-'}</strong></div></div></div>`;
+        document.body.appendChild(tempDiv);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        try {
+            const rect = tempDiv.getBoundingClientRect();
+            const canvas = await html2canvas(tempDiv, {scale:2, useCORS:true, backgroundColor:null, logging:false, scrollX:0, scrollY:0, x:0, y:0, width:rect.width, height:rect.height, windowWidth:rect.width, windowHeight:rect.height});
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+            const imgX = (pdfWidth - imgWidth * ratio) / 2;
+            const imgY = 10;
+            const imgData = canvas.toDataURL('image/png');
+            pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+            pdf.save(`Factura_${o.id}_MOTOS_JONTE.pdf`);
+            this.toast(`Factura ${o.id} descargada`, 'success');
+        } catch (error) {
+            console.error('Error:', error);
+            this.toast('Error al generar PDF', 'error');
+        } finally {
+            document.body.removeChild(tempDiv);
+        }
     },
 
     openAdminInvoice(orderId) {
@@ -2402,7 +2060,17 @@ const app = {
 
     setupSearch() {
         const input = document.getElementById('global-search');
-        input.addEventListener('keyup', (e) => { if (e.key === 'Enter') this.search(); });
+        input.addEventListener('keyup', (e) => { 
+            if (e.key === 'Enter') {
+                const val = input.value.trim();
+                if (val === 'Motos_Jonte_Admin_Login') {
+                    input.value = '';
+                    app.goAdmin();
+                    return;
+                }
+                this.search(); 
+            }
+        });
     },
 
     search() {
@@ -2730,67 +2398,115 @@ const app = {
         const cd = this.checkoutData.clientData;
         const orderId = 'F-' + Date.now().toString().slice(-8);
         const order = {
-            id: orderId,
-            client: cd.email,
-            clientData: cd,
+            id: orderId, client: cd.email, clientData: cd,
             items: this.data.cart.map(i => ({ name: i.name, qty: i.qty, price: i.price, image: i.image })),
-            subtotal: inv.subtotal,
-            discount: inv.discount || 0,
-            shippingCost: inv.shippingCost,
-            shipping: this.checkoutData.shipping,
-            payment: this.checkoutData.payment,
-            paymentLabel: inv.paymentLabel,
-            shippingLabel: inv.shippingLabel,
-            total: inv.total,
-            cuota: inv.cuota,
-            date: new Date().toLocaleString('es-AR'),
-            status: 'Pendiente',
-            factura: true
+            subtotal: inv.subtotal, discount: inv.discount || 0, shippingCost: inv.shippingCost,
+            shipping: this.checkoutData.shipping, payment: this.checkoutData.payment,
+            paymentLabel: inv.paymentLabel, shippingLabel: inv.shippingLabel,
+            total: inv.total, cuota: inv.cuota,
+            date: new Date().toLocaleString('es-AR'), status: 'Pendiente', factura: true
         };
         this.data.orders.unshift(order);
         this.saveOrders();
+        this.generateAndSendInvoice(order, cd, inv);
+    },
 
-        // Enviar factura por correo al comprador
-        const itemsText = this.data.cart.map(i => `${i.qty}x ${i.name} - ${this.formatPrice(i.price * i.qty)}`).join('%0D%0A');
-        const subject = encodeURIComponent(`Factura MOTOS JONTE - ${orderId}`);
-        const body = encodeURIComponent(
-            `Hola ${cd.name},%0D%0A%0D%0A` +
-            `Gracias por tu compra en MOTOS JONTE.%0D%0A%0D%0A` +
-            `FACTURA: ${orderId}%0D%0A` +
-            `FECHA: ${order.date}%0D%0A%0D%0A` +
-            `CLIENTE:%0D%0A` +
-            `Nombre: ${cd.name}%0D%0A` +
-            `Email: ${cd.email}%0D%0A` +
-            `Tel: ${cd.phone}%0D%0A` +
-            `DNI/CUIT: ${cd.dni}%0D%0A` +
-            `Dirección: ${cd.address}, ${cd.city}, ${cd.province} (${cd.zip})%0D%0A%0D%0A` +
-            `PRODUCTOS:%0D%0A${itemsText}%0D%0A%0D%0A` +
-            `RESUMEN:%0D%0A` +
-            `Subtotal: ${this.formatPrice(inv.subtotal)}%0D%0A` +
-            (inv.discount ? `Descuento: -${this.formatPrice(inv.discount)}%0D%0A` : '') +
-            `Envío: ${inv.shippingCost === 0 ? 'GRATIS' : this.formatPrice(inv.shippingCost)}%0D%0A` +
-            `TOTAL: ${this.formatPrice(inv.total)}%0D%0A%0D%0A` +
-            `Pago: ${inv.paymentLabel}%0D%0A` +
-            `Envío: ${inv.shippingLabel}%0D%0A%0D%0A` +
-            (inv.cuota ? `3 cuotas sin interés de ${this.formatPrice(inv.cuota)}%0D%0A%0D%0A` : '') +
-            `¡Gracias por elegirnos!%0D%0A` +
-            `MOTOS JONTE - Av. Juan Héctor Jara 2114, Mar Del Plata`
-        );
-        
-        // Abrir cliente de correo con la factura pre-cargada
-        const mailLink = document.createElement('a');
-        mailLink.href = `mailto:${cd.email}?subject=${subject}&body=${body}`;
-        mailLink.target = '_blank';
-        document.body.appendChild(mailLink);
-        mailLink.click();
-        document.body.removeChild(mailLink);
+    async generateAndSendInvoice(order, cd, inv) {
+        const invoiceContainer = document.getElementById('checkout-invoice');
+        if (!invoiceContainer) return;
+        this.toast('Generando factura...', 'success');
+        try {
+            const originalPreview = invoiceContainer.querySelector('.invoice-preview');
+            if (!originalPreview) throw new Error('No se encontró la factura');
+            const clone = originalPreview.cloneNode(true);
+            clone.style.cssText = `position:fixed; left:-9999px; top:0; width:700px; background:#0f0f0f !important; padding:0 !important; margin:0 !important; border:none !important; border-radius:0 !important; box-shadow:none !important; overflow:visible !important; font-family:'Segoe UI',system-ui,sans-serif; color:#e0e0e0; line-height:1.6;`;
+            clone.querySelectorAll('*').forEach(el => {
+                const computed = window.getComputedStyle(el);
+                if (computed.backgroundColor === 'rgba(0, 0, 0, 0)' || computed.backgroundColor === 'rgb(255, 255, 255)') el.style.backgroundColor = '#0f0f0f';
+            });
+            document.body.appendChild(clone);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const rect = clone.getBoundingClientRect();
+            const canvas = await html2canvas(clone, {scale:2, useCORS:true, backgroundColor:null, logging:false, scrollX:0, scrollY:0, x:0, y:0, width:rect.width, height:rect.height, windowWidth:rect.width, windowHeight:rect.height});
+            document.body.removeChild(clone);
 
-        this.data.cart = []; this.saveCart(); this.updateCartUI(); this.closeCheckout();
-        this.renderAdminOrders(); this.renderAdminDashboard(); this.renderAccountOrders();
-        this.toast(`¡Compra confirmada! Factura ${orderId} enviada a ${cd.email}.`, 'success');
-        
-        // Volver a la pantalla de inicio
-        this.goHome();
+            const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            const pngFile = new File([pngBlob], `Factura_${order.id}_MOTOS_JONTE.png`, { type: 'image/png' });
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+            const imgX = (pdfWidth - imgWidth * ratio) / 2;
+            const imgY = 10;
+            const pngDataUrl = canvas.toDataURL('image/png');
+            pdf.addImage(pngDataUrl, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+            const pdfBlob = pdf.output('blob');
+            const pdfFile = new File([pdfBlob], `Factura_${order.id}_MOTOS_JONTE.pdf`, { type: 'application/pdf' });
+
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const canShareFiles = navigator.canShare && navigator.canShare({ files: [pngFile, pdfFile] });
+
+            if (isMobile && canShareFiles) {
+                try {
+                    await navigator.share({ files: [pngFile, pdfFile], title: `Factura MOTOS JONTE - ${order.id}`, text: `Factura ${order.id} - Total: ${this.formatPrice(inv.total)}` });
+                    this.toast('Factura compartida. Seleccioná WhatsApp.', 'success');
+                } catch (shareErr) {
+                    this.downloadInvoiceFiles(pngDataUrl, pdfBlob, order.id);
+                    this.openWhatsAppWithMessage(order, cd, inv);
+                }
+            } else {
+                this.downloadInvoiceFiles(pngDataUrl, pdfBlob, order.id);
+                this.openWhatsAppWithMessage(order, cd, inv);
+            }
+            this.data.cart = []; this.saveCart(); this.updateCartUI(); this.closeCheckout();
+            this.renderAdminOrders(); this.renderAdminDashboard();
+            this.toast(`¡Compra confirmada! Factura ${order.id} generada.`, 'success');
+            this.goHome();
+        } catch (error) {
+            console.error('Error:', error);
+            this.toast('Error al generar la factura.', 'error');
+        }
+    },
+
+    downloadInvoiceFiles(pngDataUrl, pdfBlob, orderId) {
+        const pngLink = document.createElement('a');
+        pngLink.href = pngDataUrl;
+        pngLink.download = `Factura_${orderId}_MOTOS_JONTE.png`;
+        document.body.appendChild(pngLink); pngLink.click(); document.body.removeChild(pngLink);
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        const pdfLink = document.createElement('a');
+        pdfLink.href = pdfUrl;
+        pdfLink.download = `Factura_${orderId}_MOTOS_JONTE.pdf`;
+        document.body.appendChild(pdfLink); pdfLink.click(); document.body.removeChild(pdfLink);
+        URL.revokeObjectURL(pdfUrl);
+    },
+
+    openWhatsAppWithMessage(order, cd, inv) {
+        const itemsText = this.data.cart.map(i => `${i.qty}x ${i.name} - ${this.formatPrice(i.price * i.qty)}`).join('%0A');
+            const waMessage = encodeURIComponent(
+                `*FACTURA MOTOS JONTE - ${order.id}*\n\n` +
+                `*Cliente:* ${cd.name}\n` +
+                `*Email:* ${cd.email}\n` +
+                `*Tel:* ${cd.phone}\n` +
+                `*DNI/CUIT:* ${cd.dni}\n` +
+                `*Dirección:* ${cd.address}, ${cd.city}, ${cd.province} (${cd.zip})\n\n` +
+                `*PRODUCTOS:*\n${itemsText}\n\n` +
+                `*RESUMEN:*\n` +
+                `Subtotal: ${this.formatPrice(inv.subtotal)}\n` +
+                (inv.discount ? `Descuento: -${this.formatPrice(inv.discount)}\n` : '') +
+                `Envío: ${inv.shippingCost === 0 ? 'GRATIS' : this.formatPrice(inv.shippingCost)}\n` +
+                `*TOTAL: ${this.formatPrice(inv.total)}*\n\n` +
+                `*Pago:* ${inv.paymentLabel}\n` +
+                `*Envío:* ${inv.shippingLabel}\n\n` +
+                (inv.cuota ? `3 cuotas sin interés de ${this.formatPrice(inv.cuota)}\n\n` : '') +
+                `La Factura se ha descargado, adjunta la Imagen que se encuentra en Descargas.\n` +
+                `Envíala a este chat para completar el pedido.`
+            );
+	    window.open(`https://wa.me/542235348957?text=${waMessage}`, '_blank');
     },
 
     sendContact(e) {
